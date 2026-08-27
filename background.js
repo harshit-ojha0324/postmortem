@@ -66,6 +66,7 @@ async function handle(msg) {
     case 'SAVE_NOTE': return saveNote(msg);
     case 'SAVE_SOLUTION': return saveSolution(msg);
     case 'REVISIT_LIST': return revisitList(msg.days);
+    case 'STREAK': return getStreak();
     case 'LIST_NOTES': return listNotes();
     case 'DELETE_NOTE': return deleteNote(msg);
     case 'TEST_CONNECTION': return testConnection(msg.config);
@@ -97,12 +98,11 @@ async function loadNote(msg) {
   if (!config) return unconfigured();
   const path = notePath(config, msg.slug);
   const file = await getFile(config, path);
-  const streak = await getStreak(false);
   return {
     configured: true,
     path,
     repo: `${config.owner}/${config.repo}`,
-    streak: streak.streak,
+    streak: await getStreak(),
     content: file ? file.content : '',
     sha: file ? file.sha : null,
   };
@@ -353,11 +353,9 @@ async function refreshStreakFromRepo() {
   }
 }
 
-async function getStreak(force) {
+async function getStreak() {
   const { streakSyncedOn } = await chrome.storage.local.get('streakSyncedOn');
-  const today = localDateKey(new Date());
-  const streak = force || streakSyncedOn !== today
-    ? await refreshStreakFromRepo()
+  return streakSyncedOn !== localDateKey(new Date())
+    ? refreshStreakFromRepo()
     : computeStreak(await readDays());
-  return { streak };
 }

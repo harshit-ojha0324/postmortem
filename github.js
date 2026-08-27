@@ -157,7 +157,7 @@ export function localDateKey(d) {
 
 export function computeStreak(dates) {
   const days = [...new Set(dates)].sort().reverse();
-  if (!days.length) return { current: 0, best: 0, total: 0, lastDate: null };
+  if (!days.length) return { current: 0, best: 0, total: 0, lastDate: null, doneToday: false };
 
   const dayMs = 86400000;
   const asTime = (key) => {
@@ -181,7 +181,7 @@ export function computeStreak(dates) {
     if (run > best) best = run;
   }
 
-  return { current, best: Math.max(best, current), total: days.length, lastDate: days[0] };
+  return { current, best: Math.max(best, current), total: days.length, lastDate: days[0], doneToday: days[0] === localDateKey(new Date()) };
 }
 
 export async function listNoteSlugs(config) {

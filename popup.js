@@ -3,8 +3,8 @@
 const $ = (id) => document.getElementById(id);
 
 async function init() {
-  const { theme, enabled, askSolutions, lcStreak } = await chrome.storage.local.get(
-    ['theme', 'enabled', 'askSolutions', 'lcStreak']
+  const { theme, enabled, askSolutions } = await chrome.storage.local.get(
+    ['theme', 'enabled', 'askSolutions']
   );
 
   document.documentElement.setAttribute('data-theme', theme === 'light' ? 'light' : 'dark');
@@ -12,10 +12,14 @@ async function init() {
   $('enabledToggle').checked = enabled !== false;
   $('askToggle').checked = askSolutions !== false;
 
-  if (lcStreak?.current) $('streak').textContent = `🔥 ${lcStreak.current}`;
-
   showAccount();
   showRevisit();
+  showStreak();
+}
+
+async function showStreak() {
+  const s = await chrome.runtime.sendMessage({ type: 'STREAK' });
+  if (s?.current) $('streak').textContent = `🔥 ${s.current}`;
 }
 
 async function showRevisit() {

@@ -56,20 +56,13 @@ everything is where you left it.
 
 ## Streak
 
-The chip in the panel header is your **LeetCode** streak — days in a row with
-a submission, read from your own account via `leetcode.com/graphql` (the panel
-runs on leetcode.com, so that call is same-origin and carries your session
-cookie; nothing is scraped and no extra permission is needed). Amber once
-today is done, grey while the run is alive but today isn't.
+The chip in the panel header (and the popup) is your **note** streak: days in
+a row you committed a note. Amber once today's note is in, grey while the run
+is alive but today isn't. Best run is in the tooltip. LeetCode already shows
+your submission streak in its own nav bar, so Postmortem doesn't repeat it.
 
-Note that LeetCode's API `streak` field is the year's *max* streak, not the
-live one, so the current run is computed from the submission calendar itself,
-in UTC days, the way LeetCode counts them. Max streak and active-days land in
-the tooltip.
-
-Separately, the settings page tracks the days you **committed a note**:
-current / best / total and the last 14 days, rebuilt from the repo's commit
-history once a day so it survives a reinstall.
+The days come from the repo's commit history, refreshed once a day, so the
+streak survives a reinstall.
 
 ## Committing solutions
 

@@ -659,7 +659,7 @@ const PANEL_HTML = `
   <div class="ln-header">
     <div class="ln-cursor"></div>
     <div class="ln-title"><span class="ln-title-text">loading…</span></div>
-    <div class="ln-streak" title="days in a row with a submission on LeetCode">🔥<span class="ln-streak-n">0</span></div>
+    <div class="ln-streak" title="days in a row you committed a note">🔥<span class="ln-streak-n">0</span></div>
     <button class="ln-icon-btn ln-tip ln-settings" data-tip="Settings" aria-label="Settings">⚙</button>
     <button class="ln-icon-btn ln-tip ln-minimize" data-tip="Minimise" aria-label="Minimise">–</button>
   </div>
@@ -1527,8 +1527,6 @@ async function offerToCommit(sub) {
     ? `Accepted (${bits.join(' · ')}) — save this solution?`
     : 'Accepted — save this solution?';
   els.ask.classList.add('ln-on');
-
-  refreshLeetCodeStreak(true);
 }
 
 function solutionToNotes() {
@@ -1850,8 +1848,6 @@ function togglePreview() {
   else showPreview();
 }
 
-const LC_CACHE_MS = 10 * 60 * 1000;
-
 async function lcGraphql(query, variables) {
   const csrf = document.cookie.match(/csrftoken=([^;]+)/);
   const res = await fetch('/graphql', {
@@ -1869,120 +1865,14 @@ async function lcGraphql(query, variables) {
   return json.data;
 }
 
-async function lcUsername() {
-  const data = await lcGraphql(`query { userStatus { username isSignedIn } }`);
-  const status = data?.userStatus;
-  return status?.isSignedIn ? status.username : null;
-}
-
-async function lcCalendar(username, year) {
-  const data = await lcGraphql(
-    `query userProfileCalendar($username: String!, $year: Int) {
-       matchedUser(username: $username) {
-         userCalendar(year: $year) { streak totalActiveDays submissionCalendar }
-       }
-     }`,
-    { username, year }
-  );
-  const cal = data?.matchedUser?.userCalendar;
-  if (!cal) return {};
-
-  let days = {};
-  try { days = JSON.parse(cal.submissionCalendar || '{}'); } catch {  }
-
-  return { days, totalActiveDays: cal.totalActiveDays, maxStreak: cal.streak };
-}
-
-function utcDayKey(ms) {
-  return new Date(ms).toISOString().slice(0, 10);
-}
-
-function lcComputeStreak(dayKeys) {
-  const set = new Set(dayKeys);
-  const dayMs = 86400000;
-  const todayMs = Date.parse(`${utcDayKey(Date.now())}T00:00:00Z`);
-
-  let cursor = todayMs;
-  const doneToday = set.has(utcDayKey(todayMs));
-  if (!doneToday) cursor -= dayMs;
-
-  let count = 0;
-  while (set.has(utcDayKey(cursor))) {
-    count++;
-    cursor -= dayMs;
-  }
-  return { current: count, doneToday, total: set.size };
-}
-
-async function fetchLeetCodeStreak() {
-  const cached = await chrome.storage.local.get(['lcStreak', 'lcStreakAt']);
-  if (cached.lcStreak && Date.now() - (cached.lcStreakAt || 0) < LC_CACHE_MS) {
-    return cached.lcStreak;
-  }
-
-  const username = await lcUsername();
-  if (!username) return { signedOut: true, current: 0, doneToday: false, total: 0 };
-
-  const year = new Date().getUTCFullYear();
-  const thisYear = await lcCalendar(username, year);
-  let keys = Object.keys(thisYear.days || {}).map((sec) => utcDayKey(Number(sec) * 1000));
-
-  if (keys.includes(`${year}-01-01`)) {
-    const lastYear = await lcCalendar(username, year - 1);
-    keys = keys.concat(Object.keys(lastYear.days || {}).map((sec) => utcDayKey(Number(sec) * 1000)));
-  }
-
-  const streak = {
-    ...lcComputeStreak(keys),
-    username,
-    totalActiveDays: thisYear.totalActiveDays ?? null,
-    maxStreak: thisYear.maxStreak ?? null,
-  };
-  await chrome.storage.local.set({ lcStreak: streak, lcStreakAt: Date.now() });
-  return streak;
-}
-
-async function refreshLeetCodeStreak(force) {
-  try {
-    if (force) await chrome.storage.local.remove(['lcStreak', 'lcStreakAt']);
-    renderLeetCodeStreak(await fetchLeetCodeStreak());
-  } catch (e) {
-
-    console.debug('[postmortem] streak lookup failed:', e.message);
-  }
-}
-
-let notesStreak = null;
-let lcStreak = null;
-
-function renderLeetCodeStreak(lc) {
-  if (lc) lcStreak = lc;
-  lc = lcStreak;
-  if (!els) return;
-
-  if (!lc || lc.signedOut) {
-    els.streak.classList.remove('ln-on');
-    return;
-  }
-  els.streakN.textContent = lc.current;
-  els.streak.classList.add('ln-on');
-  els.streak.classList.toggle('ln-cold', !lc.doneToday);
-
-  const lines = [];
-  if (!lc.current) lines.push('no streak going — one problem today starts it');
-  else if (lc.doneToday) lines.push(`${lc.current}-day LeetCode streak`);
-  else lines.push(`${lc.current}-day LeetCode streak — solve one today to keep it`);
-
-  if (lc.maxStreak) lines.push(`max streak this year: ${lc.maxStreak}`);
-  if (lc.totalActiveDays) lines.push(`${lc.totalActiveDays} active days this year`);
-  if (notesStreak?.current) lines.push(`notes committed ${notesStreak.current} days running`);
-  els.streak.title = lines.join('\n');
-}
-
 function renderStreak(streak) {
-  notesStreak = streak || null;
-  if (!els) return;
-  renderLeetCodeStreak(null);
+  if (!els || !streak) return;
+  els.streak.classList.toggle('ln-on', streak.current > 0);
+  els.streak.classList.toggle('ln-cold', !streak.doneToday);
+  els.streakN.textContent = streak.current;
+  els.streak.title = `${streak.current}-day note streak`
+    + (streak.doneToday ? '' : ' — commit a note today to keep it')
+    + ` · best ${streak.best}`;
 }
 
 const DRAFT_DEBOUNCE_MS = 600;
@@ -2284,7 +2174,6 @@ async function commitNote() {
     [`committed:${state.slug}`]: { slug: state.slug, sha: res.sha, content, at: Date.now() },
   });
   renderStreak(res.streak);
-  refreshLeetCodeStreak(true);
   setStatus('saved', res.streak && res.streak.current > 1
     ? `committed — ${res.streak.current} day streak`
     : 'committed');
@@ -2294,7 +2183,6 @@ function showPanel() {
   if (hostEl) return;
   injectPanel();
   loadForCurrentProblem();
-  refreshLeetCodeStreak(false);
 }
 
 function hidePanel() {
@@ -2329,13 +2217,9 @@ async function boot() {
   watchForVerdictInDom();
 
   document.addEventListener('visibilitychange', () => {
-    if (document.hidden) {
-
-      saveDraft();
-      syncDraft();
-      return;
-    }
-    refreshLeetCodeStreak(false);
+    if (!document.hidden) return;
+    saveDraft();
+    syncDraft();
   });
 
   window.addEventListener('pagehide', () => {
@@ -2349,8 +2233,6 @@ async function boot() {
     if (location.pathname !== lastPath) {
       lastPath = location.pathname;
       loadForCurrentProblem();
-
-      refreshLeetCodeStreak(true);
     }
   }, 800);
 }
