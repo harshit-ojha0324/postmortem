@@ -24,13 +24,13 @@ clients that can't keep a secret.
 
 ### If you're building this yourself
 
-Sign-in is off until the build has an OAuth client id:
+Sign-in uses the OAuth client id in `auth.js`. To use your own:
 
 1. github.com/settings/developers → **New OAuth App** (any name; the callback
    URL is unused).
 2. On the app's page, tick **Enable Device Flow** and save.
-3. Paste the Client ID into `CLIENT_ID` in `auth.js`. It's public by design —
-   safe to commit.
+3. Replace `CLIENT_ID` in `auth.js` with your Client ID. It's public by
+   design, so it's safe to commit.
 
 Prefer per-repository access? Register a **GitHub App** with device flow on
 and *Expire user authorization tokens* off, and use its client id instead —

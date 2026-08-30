@@ -1,19 +1,13 @@
 
 
-export const CLIENT_ID = 'Ov23liA2XhibhYyl32UY';
+const CLIENT_ID = 'Ov23liA2XhibhYyl32UY';
 
 const SCOPE = 'repo';
 
 const DEVICE_CODE_URL = 'https://github.com/login/device/code';
 const TOKEN_URL = 'https://github.com/login/oauth/access_token';
 
-export function isConfigured() {
-  return !!CLIENT_ID;
-}
-
 export async function requestDeviceCode() {
-  if (!CLIENT_ID) throw new Error('no OAuth client id — see auth.js');
-
   const res = await fetch(DEVICE_CODE_URL, {
     method: 'POST',
     headers: { Accept: 'application/json', 'Content-Type': 'application/json' },

@@ -4,7 +4,7 @@ import {
   branchExists, defaultBranch, deleteFile,
   computeStreak, localDateKey,
 } from './github.js';
-import { requestDeviceCode, pollForToken, signOut, isConfigured } from './auth.js';
+import { requestDeviceCode, pollForToken, signOut } from './auth.js';
 
 const CONFIG_KEYS = ['ghToken', 'ghOwner', 'ghRepo', 'ghBranch', 'notesDir', 'solutionsDir'];
 
@@ -261,7 +261,6 @@ async function authStatus() {
     await chrome.storage.local.get(['ghToken', 'ghLogin', 'ghAvatar', 'ghAuthKind', ...CONFIG_KEYS]);
 
   return {
-    clientIdMissing: !isConfigured(),
     signedIn: !!ghToken,
     login: ghLogin || null,
     avatar: ghAvatar || null,
@@ -274,9 +273,6 @@ async function authStatus() {
 }
 
 async function authStart() {
-  if (!isConfigured()) {
-    return { error: 'This build has no GitHub OAuth client id yet — see auth.js, or use a token under Advanced.' };
-  }
   const d = await requestDeviceCode();
   return {
     deviceCode: d.device_code,

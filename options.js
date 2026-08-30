@@ -13,7 +13,6 @@ const els = {
   signedOut: $('signedOut'),
   signingIn: $('signingIn'),
   signedInBox: $('signedIn'),
-  noClientId: $('noClientId'),
   signInBtn: $('signInBtn'),
   signOutBtn: $('signOutBtn'),
   cancelAuthBtn: $('cancelAuthBtn'),
@@ -79,9 +78,6 @@ function showAuthScreen(which) {
 
 async function refreshAuth() {
   const s = await send({ type: 'AUTH_STATUS' });
-
-  els.noClientId.classList.toggle('hidden', !s.clientIdMissing);
-  els.signInBtn.disabled = s.clientIdMissing;
 
   els.branch.value = s.branch;
   els.notesDir.value = s.notesDir;
