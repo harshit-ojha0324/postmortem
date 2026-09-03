@@ -23,7 +23,7 @@ async function showStreak() {
 }
 
 async function showRevisit() {
-  const res = await chrome.runtime.sendMessage({ type: 'REVISIT_LIST', days: 14 });
+  const res = await chrome.runtime.sendMessage({ type: 'REVISIT_LIST' });
   const due = res?.due || [];
   if (!due.length) return;
 

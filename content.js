@@ -855,7 +855,6 @@ function injectPanel() {
 
 function setMoreItem(btn, icon, label) {
   btn.innerHTML = `${icon}<span>${label}</span>`;
-  btn.dataset.label = label;
 }
 
 function openDropdown(btn, menu) {
@@ -992,11 +991,7 @@ function watchToolbarSize() {
 }
 
 function openSettings() {
-  try {
-    chrome.runtime.openOptionsPage();
-  } catch {
-    chrome.runtime.sendMessage({ type: 'OPEN_OPTIONS' });
-  }
+  chrome.runtime.sendMessage({ type: 'OPEN_OPTIONS' });
 }
 
 function wireEvents() {
@@ -1332,56 +1327,37 @@ function refuseInFence() {
   return true;
 }
 
-function cycleHeading() {
+// Runs fn over the whole lines the selection touches, then reselects them.
+function editLines(fn) {
   if (refuseInFence()) return;
   const { ta, start, end } = selection();
   const from = ta.value.lastIndexOf('\n', start - 1) + 1;
   const to = ta.value.indexOf('\n', end);
   const stop = to === -1 ? ta.value.length : to;
+  const next = fn(ta.value.slice(from, stop).split('\n')).join('\n');
+  setValue(ta.value.slice(0, from) + next + ta.value.slice(stop), from, from + next.length);
+}
 
-  const next = ta.value.slice(from, stop).split('\n').map((line) => {
+function cycleHeading() {
+  editLines((lines) => lines.map((line) => {
     const m = line.match(/^(#{1,6})\s+(.*)$/);
     if (!m) return `# ${line}`;
-    const level = m[1].length;
-    return level >= 3 ? m[2] : `${'#'.repeat(level + 1)} ${m[2]}`;
-  }).join('\n');
-
-  const value = ta.value.slice(0, from) + next + ta.value.slice(stop);
-  setValue(value, from, from + next.length);
+    return m[1].length >= 3 ? m[2] : `${m[1]}# ${m[2]}`;
+  }));
 }
 
 function togglePrefix(prefix) {
-  if (refuseInFence()) return;
-  const { ta, start, end } = selection();
-  const from = ta.value.lastIndexOf('\n', start - 1) + 1;
-  const to = ta.value.indexOf('\n', end);
-  const stop = to === -1 ? ta.value.length : to;
-
-  const lines = ta.value.slice(from, stop).split('\n');
-  const allPrefixed = lines.every((l) => l.startsWith(prefix));
-  const next = lines
-    .map((l) => (allPrefixed ? l.slice(prefix.length) : prefix + l))
-    .join('\n');
-
-  const value = ta.value.slice(0, from) + next + ta.value.slice(stop);
-  setValue(value, from, from + next.length);
+  editLines((lines) => {
+    const all = lines.every((l) => l.startsWith(prefix));
+    return lines.map((l) => (all ? l.slice(prefix.length) : prefix + l));
+  });
 }
 
 function numberLines() {
-  if (refuseInFence()) return;
-  const { ta, start, end } = selection();
-  const from = ta.value.lastIndexOf('\n', start - 1) + 1;
-  const to = ta.value.indexOf('\n', end);
-  const stop = to === -1 ? ta.value.length : to;
-
-  const lines = ta.value.slice(from, stop).split('\n');
-  const numbered = lines.every((l) => /^\d+\. /.test(l));
-  const next = lines
-    .map((l, i) => (numbered ? l.replace(/^\d+\. /, '') : `${i + 1}. ${l}`))
-    .join('\n');
-
-  const value = ta.value.slice(0, from) + next + ta.value.slice(stop);
-  setValue(value, from, from + next.length);
+  editLines((lines) => {
+    const all = lines.every((l) => /^\d+\. /.test(l));
+    return lines.map((l, i) => (all ? l.replace(/^\d+\. /, '') : `${i + 1}. ${l}`));
+  });
 }
 
 function insertCodeFence() {
@@ -1598,12 +1574,8 @@ function watchForVerdictInDom() {
 }
 
 const LANG_FENCE = {
-  python3: 'python', python: 'python', cpp: 'cpp', c: 'c', java: 'java',
-  javascript: 'javascript', typescript: 'typescript', csharp: 'csharp',
-  golang: 'go', go: 'go', kotlin: 'kotlin', swift: 'swift', ruby: 'ruby',
-  scala: 'scala', rust: 'rust', php: 'php', dart: 'dart', elixir: 'elixir',
-  erlang: 'erlang', racket: 'racket', mysql: 'sql', mssql: 'sql',
-  oraclesql: 'sql', postgresql: 'sql', bash: 'bash',
+  python3: 'python', golang: 'go',
+  mysql: 'sql', mssql: 'sql', oraclesql: 'sql', postgresql: 'sql',
 };
 
 function requestEditorCode(timeoutMs = 2000) {
@@ -1661,7 +1633,8 @@ function fencedBlock(code, lang) {
   const body = code.trimEnd();
   const longest = (body.match(/`+/g) || []).reduce((n, run) => Math.max(n, run.length), 0);
   const fence = '`'.repeat(Math.max(3, longest + 1));
-  const label = LANG_FENCE[(lang || '').toLowerCase()] || lang || '';
+  const key = (lang || '').toLowerCase();
+  const label = LANG_FENCE[key] || key;
   return `\n${fence}${label}\n${body}\n${fence}\n`;
 }
 

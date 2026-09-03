@@ -65,7 +65,7 @@ async function handle(msg) {
     case 'LOAD_NOTE': return loadNote(msg);
     case 'SAVE_NOTE': return saveNote(msg);
     case 'SAVE_SOLUTION': return saveSolution(msg);
-    case 'REVISIT_LIST': return revisitList(msg.days);
+    case 'REVISIT_LIST': return revisitList();
     case 'STREAK': return getStreak();
     case 'LIST_NOTES': return listNotes();
     case 'DELETE_NOTE': return deleteNote(msg);
@@ -84,13 +84,8 @@ async function handle(msg) {
   }
 }
 
-async function ghSignedIn() {
-  const { ghToken } = await chrome.storage.local.get('ghToken');
-  return !!ghToken;
-}
-
 async function unconfigured() {
-  return { configured: false, signedIn: await ghSignedIn() };
+  return { configured: false, signedIn: !!(await loadToken()) };
 }
 
 async function loadNote(msg) {
@@ -161,15 +156,7 @@ const SYNC_ITEM_BUDGET = 7000;
 
 async function readNoteDates() {
   const { noteDates } = await chrome.storage.sync.get('noteDates');
-  if (noteDates) return noteDates;
-
-  const legacy = (await chrome.storage.local.get('noteDates')).noteDates;
-  if (!legacy) return {};
-  const compact = {};
-  for (const [slug, v] of Object.entries(legacy)) compact[slug] = v?.date ?? null;
-  await chrome.storage.sync.set({ noteDates: compact });
-  await chrome.storage.local.remove('noteDates');
-  return compact;
+  return noteDates || {};
 }
 
 async function writeNoteDates(dates) {
@@ -215,12 +202,12 @@ function slugTitle(slug) {
   return slug.replace(/-/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase());
 }
 
-async function revisitList(days = 14) {
+const REVISIT_AFTER_DAYS = 14;
+
+async function revisitList() {
   await seedNoteDates();
   const entries = Object.entries(await readNoteDates());
   const today = Date.parse(`${localDateKey(new Date())}T00:00:00`);
-
-  const title = slugTitle;
 
   const due = entries
     .map(([slug, date]) => {
@@ -228,9 +215,9 @@ async function revisitList(days = 14) {
       const age = date
         ? Math.round((today - Date.parse(`${date}T00:00:00`)) / 86400000)
         : null;
-      return { slug, title: title(slug), date, days: age };
+      return { slug, title: slugTitle(slug), date, days: age };
     })
-    .filter((n) => n.days === null || n.days >= days)
+    .filter((n) => n.days === null || n.days >= REVISIT_AFTER_DAYS)
     .sort((a, b) => (b.days ?? Infinity) - (a.days ?? Infinity));
 
   return { due, tracked: entries.length };

@@ -32,15 +32,13 @@ window.addEventListener('message', (event) => {
     reason = 'threw: ' + (err?.message || err);
   }
 
-  if (window.__postmortemDebug) console.log('[postmortem/page] GET_CODE ->', { reason, lang, length: code.length });
   window.postMessage({ source: 'postmortem-page', type: 'CODE', code, lang, reason }, '*');
 });
 
 const SUBMIT_RE = /\/submit\/?(\?|$)/;
 const CHECK_RE = /\/check\/?(\?|$)/;
 
-function ping(why) {
-  if (window.__postmortemDebug) console.log('[postmortem/page] submission signal:', why);
+function ping() {
   window.postMessage({ source: 'postmortem-page', type: 'SUBMITTED' }, '*');
 }
 
@@ -48,12 +46,12 @@ const originalFetch = window.fetch;
 window.fetch = function (...args) {
   const input = args[0];
   const url = typeof input === 'string' ? input : input?.url || '';
-  if (SUBMIT_RE.test(url) || CHECK_RE.test(url)) ping(url);
+  if (SUBMIT_RE.test(url) || CHECK_RE.test(url)) ping();
   return originalFetch.apply(this, args);
 };
 
 const originalOpen = XMLHttpRequest.prototype.open;
 XMLHttpRequest.prototype.open = function (method, url, ...rest) {
-  if (SUBMIT_RE.test(url || '') || CHECK_RE.test(url || '')) ping(url);
+  if (SUBMIT_RE.test(url || '') || CHECK_RE.test(url || '')) ping();
   return originalOpen.call(this, method, url, ...rest);
 };
