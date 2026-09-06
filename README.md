@@ -1,7 +1,7 @@
 # Postmortem
 
-Write your own notes on any LeetCode problem — approach, edge cases, what you
-got wrong the first time — and commit them straight to a GitHub repo you own.
+A postmortem for every LeetCode problem: the approach, the edge cases, what
+you got wrong the first time. Committed straight to a GitHub repo you own.
 Not your solution code, your *thinking*. Versioned, searchable, yours.
 
 ## Install (unpacked, for now)
@@ -127,3 +127,4 @@ between.
 | `github.js` | GitHub API wrapper — contents, repos, commit history, streak math |
 | `auth.js` | GitHub OAuth device flow (no client secret) |
 | `options.html` / `options.js` | Settings / connect-GitHub page |
+

@@ -2,7 +2,7 @@
   "manifest_version": 3,
   "name": "Postmortem",
   "version": "1.0.0",
-  "description": "Write your own notes on every LeetCode problem, committed straight to your GitHub repo.",
+  "description": "Write a postmortem for every LeetCode problem, committed straight to your own GitHub repo.",
   "permissions": [
     "storage"
   ],
