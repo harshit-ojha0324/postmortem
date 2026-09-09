@@ -1,6 +1,7 @@
 
 
-const CLIENT_ID = 'Ov23liA2XhibhYyl32UY';
+// Your OAuth App's client id (device flow on). Public by design — see README.
+const CLIENT_ID = '';
 
 const SCOPE = 'repo';
 
@@ -8,6 +9,7 @@ const DEVICE_CODE_URL = 'https://github.com/login/device/code';
 const TOKEN_URL = 'https://github.com/login/oauth/access_token';
 
 export async function requestDeviceCode() {
+  if (!CLIENT_ID) throw new Error('no OAuth client id yet — set CLIENT_ID in auth.js, or use a token under Advanced');
   const res = await fetch(DEVICE_CODE_URL, {
     method: 'POST',
     headers: { Accept: 'application/json', 'Content-Type': 'application/json' },
