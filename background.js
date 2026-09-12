@@ -3,6 +3,7 @@ import {
   getUser, createRepo, noteCommitDates, listNoteSlugs,
   branchExists, defaultBranch, deleteFile,
   computeStreak, localDateKey,
+  getReviews, updateReviews, nextReview, addDays, daysBetween, FIRST_INTERVAL,
 } from './github.js';
 import { requestDeviceCode, pollForToken, signOut } from './auth.js';
 
@@ -65,7 +66,8 @@ async function handle(msg) {
     case 'LOAD_NOTE': return loadNote(msg);
     case 'SAVE_NOTE': return saveNote(msg);
     case 'SAVE_SOLUTION': return saveSolution(msg);
-    case 'REVISIT_LIST': return revisitList();
+    case 'DUE_REVIEWS': return dueReviews();
+    case 'RATE': return rateReview(msg);
     case 'STREAK': return getStreak();
     case 'LIST_NOTES': return listNotes();
     case 'DELETE_NOTE': return deleteNote(msg);
@@ -92,7 +94,9 @@ async function loadNote(msg) {
   const config = await loadConfig();
   if (!config) return unconfigured();
   const path = notePath(config, msg.slug);
-  const file = await getFile(config, path);
+  // a broken reviews.json must never stop a note from loading
+  const [file, reviews] = await Promise.all([getFile(config, path), getReviews(config).catch(() => ({}))]);
+  const review = reviews[msg.slug] || null;
   return {
     configured: true,
     path,
@@ -100,6 +104,8 @@ async function loadNote(msg) {
     streak: await getStreak(),
     content: file ? file.content : '',
     sha: file ? file.sha : null,
+    review,
+    reviewDue: !!file && (!review || review.due <= localDateKey(new Date())),
   };
 }
 
@@ -109,17 +115,37 @@ async function saveNote(msg) {
   const path = notePath(config, msg.slug);
   const message = `notes: ${msg.title || msg.slug}`;
 
+  let sha;
   try {
-    const sha = await saveFile(config, path, msg.content, msg.sha, message);
-    const streak = await recordToday();
-    await recordNoteDate(msg.slug);
-    return { configured: true, sha, streak };
+    sha = await saveFile(config, path, msg.content, msg.sha, message);
   } catch (e) {
-
     if (!/conflict|409|422/i.test(e.message)) throw e;
     const current = await getFile(config, path).catch(() => null);
     return { configured: true, conflict: true, sha: current ? current.sha : msg.sha };
   }
+
+  // A new note goes on the review schedule. If that write fails the note is
+  // still saved, and it shows up as due until it's rated.
+  if (!msg.sha) {
+    const due = addDays(localDateKey(new Date()), FIRST_INTERVAL);
+    await updateReviews(config, (reviews) => {
+      if (reviews[msg.slug]) return null;
+      reviews[msg.slug] = { due, interval: FIRST_INTERVAL };
+      return `review: ${msg.title || msg.slug} due ${due}`;
+    }).catch(() => {});
+  }
+  return { configured: true, sha, streak: await recordToday() };
+}
+
+async function rateReview(msg) {
+  const config = await loadConfig();
+  if (!config) return unconfigured();
+  let next;
+  await updateReviews(config, (reviews) => {
+    next = reviews[msg.slug] = nextReview(reviews[msg.slug], msg.rating, localDateKey(new Date()));
+    return `review: ${msg.title || msg.slug} (${msg.rating}), next ${next.due}`;
+  });
+  return { configured: true, ...next };
 }
 
 async function saveSolution(msg) {
@@ -143,96 +169,44 @@ async function deleteNote(msg) {
   const file = await getFile(config, path);
   if (!file) return { configured: true, deleted: false, reason: 'nothing committed yet' };
 
+  // its reviews.json entry is left behind; due lists only show notes that exist
   await deleteFile(config, path, file.sha, `remove notes: ${msg.title || msg.slug}`);
-
-  const dates = await readNoteDates();
-  delete dates[msg.slug];
-  await writeNoteDates(dates);
-
   return { configured: true, deleted: true, path };
-}
-
-const SYNC_ITEM_BUDGET = 7000;
-
-async function readNoteDates() {
-  const { noteDates } = await chrome.storage.sync.get('noteDates');
-  return noteDates || {};
-}
-
-async function writeNoteDates(dates) {
-  let entries = Object.entries(dates);
-
-  while (JSON.stringify(Object.fromEntries(entries)).length > SYNC_ITEM_BUDGET) {
-    entries.sort((a, c) => String(c[1] ?? '').localeCompare(String(a[1] ?? '')));
-    entries = entries.slice(1);
-  }
-  await chrome.storage.sync.set({ noteDates: Object.fromEntries(entries) });
-}
-
-async function recordNoteDate(slug) {
-  if (!slug) return;
-  const dates = await readNoteDates();
-  dates[slug] = localDateKey(new Date());
-  await writeNoteDates(dates);
-}
-
-async function seedNoteDates() {
-  const config = await loadConfig();
-  if (!config) return;
-
-  try {
-    const slugs = await listNoteSlugs(config);
-    if (!slugs.length) return;
-
-    const dates = await readNoteDates();
-    let added = 0;
-
-    for (const slug of slugs) {
-      if (slug in dates) continue;
-      dates[slug] = null;
-      added++;
-    }
-    if (added) await writeNoteDates(dates);
-  } catch {
-
-  }
 }
 
 function slugTitle(slug) {
   return slug.replace(/-/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase());
 }
 
-const REVISIT_AFTER_DAYS = 14;
+async function dueReviews() {
+  const config = await loadConfig();
+  if (!config) return { due: [] };
+  const [slugs, reviews] = await Promise.all([listNoteSlugs(config), getReviews(config)]);
+  const today = localDateKey(new Date());
 
-async function revisitList() {
-  await seedNoteDates();
-  const entries = Object.entries(await readNoteDates());
-  const today = Date.parse(`${localDateKey(new Date())}T00:00:00`);
-
-  const due = entries
-    .map(([slug, date]) => {
-
-      const age = date
-        ? Math.round((today - Date.parse(`${date}T00:00:00`)) / 86400000)
-        : null;
-      return { slug, title: slugTitle(slug), date, days: age };
-    })
-    .filter((n) => n.days === null || n.days >= REVISIT_AFTER_DAYS)
+  // days = how overdue; null = never scheduled (counts as due)
+  const due = slugs
+    .filter((slug) => !reviews[slug] || reviews[slug].due <= today)
+    .map((slug) => ({
+      slug,
+      title: slugTitle(slug),
+      days: reviews[slug] ? daysBetween(reviews[slug].due, today) : null,
+    }))
     .sort((a, b) => (b.days ?? Infinity) - (a.days ?? Infinity));
 
-  return { due, tracked: entries.length };
+  return { due };
 }
 
 async function listNotes() {
   const config = await loadConfig();
   if (!config) return unconfigured();
 
-  const slugs = await listNoteSlugs(config);
-  const dates = await readNoteDates();
+  const [slugs, reviews] = await Promise.all([listNoteSlugs(config), getReviews(config).catch(() => ({}))]);
 
+  // soonest review first; never-scheduled notes sort to the top
   const notes = slugs
-    .map((slug) => ({ slug, title: slugTitle(slug), date: dates[slug] ?? null }))
-    .sort((a, b) => (b.date || '').localeCompare(a.date || '') || a.title.localeCompare(b.title));
+    .map((slug) => ({ slug, title: slugTitle(slug), due: reviews[slug]?.due ?? null }))
+    .sort((a, b) => (a.due || '').localeCompare(b.due || '') || a.title.localeCompare(b.title));
 
   return {
     configured: true,

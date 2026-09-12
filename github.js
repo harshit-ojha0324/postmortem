@@ -222,3 +222,54 @@ export async function deleteFile(config, path, sha, message) {
   if (!res.ok) throw new Error(describeError(res.status, await safeJson(res)));
   return true;
 }
+
+// Review schedule: one reviews.json at the repo root, { slug: { due, interval } }.
+// It lives in the user's repo, so it syncs across devices and survives a reinstall.
+const REVIEWS_PATH = 'reviews.json';
+export const FIRST_INTERVAL = 3;
+
+const STEP = {
+  again: () => 1,
+  hard: (i) => Math.max(2, Math.round(i * 1.5)),
+  easy: (i) => Math.max(4, Math.round(i * 2.5)),
+};
+
+export function addDays(key, n) {
+  const [y, m, d] = key.split('-').map(Number);
+  return localDateKey(new Date(y, m - 1, d + n));
+}
+
+export function daysBetween(from, to) {
+  const utc = (key) => {
+    const [y, m, d] = key.split('-').map(Number);
+    return Date.UTC(y, m - 1, d);
+  };
+  return Math.round((utc(to) - utc(from)) / 86400000);
+}
+
+export function nextReview(entry, rating, today) {
+  const interval = STEP[rating](entry?.interval || FIRST_INTERVAL);
+  return { due: addDays(today, interval), interval };
+}
+
+export async function getReviews(config) {
+  const file = await getFile(config, REVIEWS_PATH);
+  return file ? JSON.parse(file.content) : {};
+}
+
+// fn edits the schedule in place and returns a commit message, or nothing to skip the write.
+export async function updateReviews(config, fn) {
+  for (let attempt = 0; ; attempt++) {
+    const file = await getFile(config, REVIEWS_PATH);
+    const reviews = file ? JSON.parse(file.content) : {};
+    const message = fn(reviews);
+    if (!message) return reviews;
+    try {
+      await saveFile(config, REVIEWS_PATH, `${JSON.stringify(reviews, null, 2)}\n`, file?.sha, message);
+      return reviews;
+    } catch (e) {
+      // another device wrote first: re-read and retry once
+      if (attempt || !/conflict|409|422/i.test(e.message)) throw e;
+    }
+  }
+}

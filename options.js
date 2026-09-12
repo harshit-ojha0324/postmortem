@@ -1,3 +1,4 @@
+import { daysBetween, localDateKey } from './github.js';
 
 
 const $ = (id) => document.getElementById(id);
@@ -423,12 +424,9 @@ els.saveBtn.addEventListener('click', async () => {
 let allNotes = [];
 let notesRepoInfo = null;
 
-function ageLabel(date) {
-  if (!date) return '';
-  const days = Math.round((Date.now() - Date.parse(`${date}T00:00:00`)) / 86400000);
-  if (days <= 0) return 'today';
-  if (days < 30) return `${days}d ago`;
-  return `${Math.floor(days / 30)}mo ago`;
+function dueLabel(due) {
+  const days = due ? daysBetween(localDateKey(new Date()), due) : 0;
+  return days <= 0 ? 'review due' : `review in ${days}d`;
 }
 
 function renderNotesList() {
@@ -460,7 +458,7 @@ function renderNotesList() {
 
     const date = document.createElement('span');
     date.className = 'note-date';
-    date.textContent = ageLabel(note.date);
+    date.textContent = dueLabel(note.due);
 
     row.append(title, date);
     els.notesList.appendChild(row);

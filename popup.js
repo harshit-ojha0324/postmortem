@@ -23,7 +23,7 @@ async function showStreak() {
 }
 
 async function showRevisit() {
-  const res = await chrome.runtime.sendMessage({ type: 'REVISIT_LIST' });
+  const res = await chrome.runtime.sendMessage({ type: 'DUE_REVIEWS' });
   const due = res?.due || [];
   if (!due.length) return;
 
@@ -45,11 +45,7 @@ async function showRevisit() {
 
     const age = document.createElement('span');
     age.className = 'age';
-    age.textContent = note.days === null
-      ? 'older'
-      : note.days >= 30
-        ? `${Math.floor(note.days / 30)}mo`
-        : `${note.days}d`;
+    age.textContent = note.days === null ? 'new' : note.days === 0 ? 'today' : `${note.days}d late`;
 
     a.append(name, age);
     const li = document.createElement('li');
