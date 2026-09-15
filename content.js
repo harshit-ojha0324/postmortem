@@ -239,6 +239,9 @@ button, textarea, input, select { font: inherit; }
 .ln-ask-note:hover { background: var(--ln-green-bg-3); color: var(--ln-text); }
 .ln-ask-no { background: transparent; color: var(--ln-dim); }
 .ln-ask-no:hover { color: var(--ln-text); }
+.ln-review { flex-wrap: wrap; }
+.ln-review .ln-ask-text { flex-basis: 100%; }
+.ln-body .ln-hidden { display: none; }
 
 .ln-toolstrip {
   display: flex;
@@ -688,6 +691,13 @@ const PANEL_HTML = `
       <button class="ln-tool ln-tip ln-preview-btn"></button>
     </div>
     <div class="ln-body">
+      <div class="ln-ask ln-review">
+        <span class="ln-ask-text">Review due. Solve it again before you look at your note, then rate it.</span>
+        <button class="ln-ask-no ln-review-show">Show note</button>
+        <button class="ln-ask-note" data-rating="again">Again</button>
+        <button class="ln-ask-note" data-rating="hard">Hard</button>
+        <button class="ln-ask-yes" data-rating="easy">Easy</button>
+      </div>
       <div class="ln-ask">
         <span class="ln-ask-text">Accepted — commit this solution?</span>
         <button class="ln-ask-yes">Commit</button>
@@ -767,6 +777,7 @@ function injectPanel() {
   root.innerHTML = PANEL_HTML;
   shadow.appendChild(root);
 
+  const ask = root.querySelector('.ln-ask:not(.ln-review)');
   els = {
     panel: root.querySelector('.ln-panel'),
     titleText: root.querySelector('.ln-title-text'),
@@ -786,11 +797,13 @@ function injectPanel() {
     toolsMoreMenu: root.querySelector('.ln-tools-more-menu'),
     hoverTip: root.querySelector('.ln-hover-tip'),
 
-    ask: root.querySelector('.ln-ask'),
-    askText: root.querySelector('.ln-ask-text'),
-    askYes: root.querySelector('.ln-ask-yes'),
-    askNote: root.querySelector('.ln-ask-note'),
-    askNo: root.querySelector('.ln-ask-no'),
+    ask,
+    askText: ask.querySelector('.ln-ask-text'),
+    askYes: ask.querySelector('.ln-ask-yes'),
+    askNote: ask.querySelector('.ln-ask-note'),
+    askNo: ask.querySelector('.ln-ask-no'),
+    review: root.querySelector('.ln-review'),
+    reviewShow: root.querySelector('.ln-review-show'),
     textarea: root.querySelector('.ln-textarea'),
     confirm: root.querySelector('.ln-confirm'),
     confirmText: root.querySelector('.ln-confirm-text'),
@@ -1054,6 +1067,10 @@ function wireEvents() {
     togglePreview();
   });
   els.importBtn.addEventListener('click', insertCodeBlock);
+  els.reviewShow.addEventListener('click', () => hideNote(false));
+  for (const btn of els.review.querySelectorAll('[data-rating]')) {
+    btn.addEventListener('click', () => rateReview(btn.dataset.rating));
+  }
   els.askYes.addEventListener('click', commitSolution);
   els.askNote.addEventListener('click', solutionToNotes);
   els.askNo.addEventListener('click', () => {
@@ -1678,6 +1695,36 @@ async function insertCodeBlock() {
   }
 }
 
+// While a review is due the note stays hidden, so you solve it from memory first.
+function hideNote(hidden) {
+  els.textarea.classList.toggle('ln-hidden', hidden);
+  els.importBtn.classList.toggle('ln-hidden', hidden);
+  els.reviewShow.classList.toggle('ln-hidden', !hidden);
+}
+
+async function rateReview(rating) {
+  const slug = state.slug;
+  const buttons = els.review.querySelectorAll('button');
+  buttons.forEach((b) => { b.disabled = true; });
+
+  const res = await chrome.runtime.sendMessage({ type: 'RATE', slug, title: numberedTitle(), rating });
+
+  if (!els || state.slug !== slug) return;
+  buttons.forEach((b) => { b.disabled = false; });
+  if (res.error) {
+    setStatus('error', res.error);
+    if (res.authFailed) showEmptyState('expired');
+    return;
+  }
+  if (!res.configured) {
+    showEmptyState(res.signedIn ? 'noRepo' : 'signedOut');
+    return;
+  }
+  els.review.classList.remove('ln-on');
+  hideNote(false);
+  setStatus('saved', `next review in ${res.interval} day${res.interval === 1 ? '' : 's'}`);
+}
+
 function setMinimized(minimized) {
   els.panel.classList.toggle('ln-hidden', minimized);
   els.tab.classList.toggle('ln-hidden', !minimized);
@@ -1998,6 +2045,8 @@ async function loadForCurrentProblem() {
   if (!els) return;
   pendingSubmission = null;
   els.ask.classList.remove('ln-on');
+  els.review.classList.remove('ln-on');
+  hideNote(false);
 
   const leaving = state.slug;
   if (leaving) {
@@ -2048,8 +2097,15 @@ async function loadForCurrentProblem() {
   state.lastSavedContent = res.content || '';
   els.textarea.value = state.lastSavedContent;
 
+  if (res.reviewDue) {
+    els.review.classList.add('ln-on');
+    hideNote(true);
+  }
+
   if (await restoreDraft(state.lastSavedContent)) {
     setStatus('modified', 'restored your unsaved draft');
+  } else if (res.reviewDue) {
+    setStatus(null, 'review due');
   } else {
     setStatus(state.sha ? 'saved' : null, state.sha ? 'up to date' : 'no note yet');
   }
