@@ -109,9 +109,31 @@ Switching to another problem without a page reload — using LeetCode's own
 "next problem" navigation — is handled; the panel reloads the right note
 automatically.
 
+## Review
+
+Every note goes on a review schedule, kept in `reviews.json` at the root of
+your repo (`{ "two-sum": { "due": "2026-11-24", "interval": 3 } }`). A new
+note is first due 3 days after you commit it.
+
+When a note is due, the panel hides it and asks you to solve the problem
+again before you look. **Show note** reveals it; then rate how it went:
+
+- **Again**: you couldn't do it. Due again tomorrow.
+- **Hard**: you got there, slowly. The interval grows 1.5×.
+- **Easy**: it came straight back. The interval grows 2.5×.
+
+Each rating is a commit (`review: 1. Two Sum (easy), next 2026-12-03`), so
+your review history is in `git log` too. The popup lists what's due, most
+overdue first. Notes with no entry yet, such as ones written before this
+feature, count as due. Editing a note doesn't reschedule it; only a rating
+does.
+
+`node github.test.mjs` checks the date and interval math.
+
 ## Where your data lives
 
-Nowhere but your browser and your own GitHub repo. The token is stored in
+Nowhere but your browser and your own GitHub repo: notes, solutions and the
+review schedule are all files there. The token is stored in
 `chrome.storage.local` (this browser only, not synced). Every request goes
 straight from your browser to `api.github.com` — there's no server in
 between.

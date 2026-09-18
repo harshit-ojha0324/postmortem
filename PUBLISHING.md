@@ -18,7 +18,7 @@ Unzip anywhere, then in Chrome:
 An unpacked extension's ID is derived from its **folder path**, and
 `chrome.storage.sync` is keyed per extension ID. A different path on the other
 machine means a different ID, which means a separate sync bucket — your drafts
-and revisit dates will not cross over.
+will not cross over.
 
 Fix it once by pinning the ID:
 
@@ -50,7 +50,7 @@ want to keep that ID.
 | | Travels between devices | Why |
 |---|---|---|
 | Drafts | Yes (`storage.sync`) | needs a pinned ID, 10s debounce, 12 most recent, under 4KB each |
-| Revisit dates | Yes (`storage.sync`) | compact `{slug: date}` |
+| Review schedule | Yes | `reviews.json` in your GitHub repo |
 | Notes and solutions | Yes | they live in your GitHub repo |
 | GitHub token | **No** (`storage.local`) | deliberate — sign in again on each device |
 | Panel size, theme, toggles | No (`storage.local`) | per-machine preferences |
@@ -108,7 +108,7 @@ want to keep that ID.
 
 ## 3. After it goes live
 
-- Installing from the store uses the **store's ID**. Drafts and revisit dates
+- Installing from the store uses the **store's ID**. Drafts
   from your unpacked copy do not carry over unless you shipped the same `key`.
 - Users get updates automatically within a few hours of you publishing a new
   version.
