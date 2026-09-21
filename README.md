@@ -151,4 +151,6 @@ between.
 | `auth.js` | GitHub OAuth device flow (no client secret) |
 | `options.html` / `options.js` | Settings / connect-GitHub page |
 
+## License
 
+[MIT](LICENSE). The bundled Marked library retains its [own license](vendor/marked.LICENSE).
