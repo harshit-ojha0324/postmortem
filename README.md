@@ -151,3 +151,4 @@ between.
 | `auth.js` | GitHub OAuth device flow (no client secret) |
 | `options.html` / `options.js` | Settings / connect-GitHub page |
 
+
