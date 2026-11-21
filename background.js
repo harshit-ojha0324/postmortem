@@ -65,6 +65,7 @@ async function handle(msg) {
   switch (msg.type) {
     case 'LOAD_NOTE': return loadNote(msg);
     case 'SAVE_NOTE': return saveNote(msg);
+    case 'NOTE_FILE': return noteFile(msg);
     case 'SAVE_SOLUTION': return saveSolution(msg);
     case 'DUE_REVIEWS': return dueReviews();
     case 'RATE': return rateReview(msg);
@@ -109,19 +110,14 @@ async function loadNote(msg) {
   };
 }
 
-async function saveNote(msg) {
-  const config = await loadConfig();
-  if (!config) return unconfigured();
-  const path = notePath(config, msg.slug);
-  const message = `notes: ${msg.title || msg.slug}`;
+// The note as it's committed. Re-reads the file so keys edited on GitHub survive.
+async function withFrontmatter(config, msg) {
   const today = localDateKey(new Date());
-
-  // re-read the frontmatter so keys edited on GitHub survive this commit
-  const existing = msg.sha ? await getFile(config, path) : null;
+  const existing = config && msg.sha ? await getFile(config, notePath(config, msg.slug)) : null;
   const { entries } = splitFrontmatter(existing?.content || '');
   const created = entries.find((e) => e.key === 'created')?.lines[0].match(/\d{4}-\d{2}-\d{2}/)?.[0];
   const meta = msg.meta || {};
-  const content = joinFrontmatter(entries, {
+  return joinFrontmatter(entries, {
     number: meta.number,
     title: meta.title,
     difficulty: meta.difficulty,
@@ -130,6 +126,20 @@ async function saveNote(msg) {
     created: msg.sha ? created : today,
     updated: today,
   }, msg.content);
+}
+
+// Download works signed out or offline too, just without the keys only GitHub has.
+async function noteFile(msg) {
+  const config = await loadConfig();
+  return { content: await withFrontmatter(config, msg).catch(() => withFrontmatter(null, msg)) };
+}
+
+async function saveNote(msg) {
+  const config = await loadConfig();
+  if (!config) return unconfigured();
+  const path = notePath(config, msg.slug);
+  const message = `notes: ${msg.title || msg.slug}`;
+  const content = await withFrontmatter(config, msg);
 
   let sha;
   try {

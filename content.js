@@ -1234,15 +1234,28 @@ async function deleteNote() {
   setStatus('saved', 'note deleted from GitHub');
 }
 
-function downloadNote() {
+// what the background needs to write a note's file, frontmatter included
+function noteMessage(type, content) {
+  return {
+    type,
+    slug: state.slug,
+    title: numberedTitle(),
+    meta: { number: state.number, title: state.title, difficulty: state.difficulty, tags: state.tags },
+    content,
+    sha: state.sha,
+  };
+}
+
+async function downloadNote() {
   const text = els.textarea.value;
   if (!text.trim()) {
     setStatus(null, 'nothing to download yet');
     return;
   }
 
+  const res = await chrome.runtime.sendMessage(noteMessage('NOTE_FILE', text)).catch(() => null);
   const name = `${state.number ? `${state.number}-` : ''}${state.slug || 'note'}.md`;
-  const url = URL.createObjectURL(new Blob([text], { type: 'text/markdown;charset=utf-8' }));
+  const url = URL.createObjectURL(new Blob([res?.content || text], { type: 'text/markdown;charset=utf-8' }));
   const link = document.createElement('a');
   link.href = url;
   link.download = name;
@@ -2170,14 +2183,7 @@ async function commitNote() {
   els.commitBtn.textContent = 'Committing…';
   setStatus(null, 'committing…');
 
-  const res = await chrome.runtime.sendMessage({
-    type: 'SAVE_NOTE',
-    slug: state.slug,
-    title: numberedTitle(),
-    meta: { number: state.number, title: state.title, difficulty: state.difficulty, tags: state.tags },
-    content,
-    sha: state.sha,
-  });
+  const res = await chrome.runtime.sendMessage(noteMessage('SAVE_NOTE', content));
 
   state.saving = false;
   els.commitBtn.disabled = false;

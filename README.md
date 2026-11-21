@@ -127,9 +127,10 @@ updated: 2026-11-24
 ```
 
 Number, difficulty and tags come from LeetCode's API. The panel never shows
-the block: it's stripped on load and rewritten on every commit. `created` is
-set on a note's first commit (notes from before this have none). Keys you add
-yourself on GitHub are kept as written.
+the block: it's stripped on load and rewritten on every commit. **Download**
+saves the same file, frontmatter included. `created` is set on a note's first
+commit (notes from before this have none). Keys you add yourself on GitHub
+are kept as written.
 
 ## Review
 
