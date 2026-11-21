@@ -41,6 +41,38 @@ export function notePath(config, slug) {
   return `${dir}/${slug}.md`;
 }
 
+// Frontmatter: '---\n<yaml>\n---\n\n<body>'. Entries are top-level keys with
+// their continuation lines, so keys Postmortem doesn't manage (added on
+// GitHub, by Obsidian…) are written back exactly as they were.
+export function splitFrontmatter(text) {
+  const m = /^---\r?\n([\s\S]*?\r?\n)?---[ \t]*(?:\r?\n|$)/.exec(text);
+  if (!m) return { entries: [], body: text };
+  const entries = [];
+  for (const line of (m[1] || '').split(/\r?\n/).slice(0, -1)) {
+    const key = /^([\w-]+)\s*:/.exec(line)?.[1];
+    if (key || !entries.length) entries.push({ key, lines: [line] });
+    else entries.at(-1).lines.push(line);
+  }
+  return { entries, body: text.slice(m[0].length).replace(/^\r?\n/, '') };
+}
+
+// JSON strings and arrays are valid YAML, so quoting can't break the block.
+const yaml = (v) => Array.isArray(v) ? `[${v.map(yaml).join(', ')}]`
+  : /^(\d+|\d{4}-\d{2}-\d{2})$/.test(v) ? v : JSON.stringify(v);
+
+// Sets each key in values; a missing value leaves the existing entry alone.
+export function joinFrontmatter(entries, values, body) {
+  const out = entries.map((e) => ({ ...e }));
+  for (const [key, v] of Object.entries(values)) {
+    if (v == null || v === '' || (Array.isArray(v) && !v.length)) continue;
+    const lines = [`${key}: ${yaml(v)}`];
+    const e = out.find((x) => x.key === key);
+    if (e) e.lines = lines;
+    else out.push({ key, lines });
+  }
+  return `---\n${out.flatMap((e) => e.lines).join('\n')}\n---\n\n${body}`;
+}
+
 export async function getFile(config, path) {
   const url = `${API}/repos/${config.owner}/${config.repo}/contents/${encodePath(path)}?ref=${encodeURIComponent(config.branch || 'main')}`;
   const res = await fetch(url, { headers: headers(config) });

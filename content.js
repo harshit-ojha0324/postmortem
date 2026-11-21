@@ -736,6 +736,8 @@ const state = {
   slug: null,
   title: null,
   number: null,
+  difficulty: null,
+  tags: null,
   sha: null,
   lastSavedContent: '',
   saving: false,
@@ -1417,15 +1419,15 @@ window.addEventListener('message', (event) => {
   pollForAccepted();
 });
 
-async function lcQuestionNumber(slug) {
+async function lcQuestionMeta(slug) {
   try {
     const data = await lcGraphql(
-      `query questionNumber($titleSlug: String!) {
-         question(titleSlug: $titleSlug) { questionFrontendId }
+      `query questionMeta($titleSlug: String!) {
+         question(titleSlug: $titleSlug) { questionFrontendId difficulty topicTags { name } }
        }`,
       { titleSlug: slug }
     );
-    return data?.question?.questionFrontendId || null;
+    return data?.question || null;
   } catch {
     return null;
   }
@@ -1435,10 +1437,12 @@ function numberedTitle() {
   return state.number ? `${state.number}. ${state.title}` : state.title;
 }
 
-async function loadQuestionNumber(slug) {
-  const number = await lcQuestionNumber(slug);
-  if (state.slug !== slug) return;
-  state.number = number;
+async function loadQuestionMeta(slug) {
+  const q = await lcQuestionMeta(slug);
+  if (state.slug !== slug || !q) return;
+  state.number = q.questionFrontendId || null;
+  state.difficulty = q.difficulty || null;
+  state.tags = (q.topicTags || []).map((t) => t.name);
 }
 
 async function lcLatestSubmission(slug) {
@@ -2059,8 +2063,10 @@ async function loadForCurrentProblem() {
   if (!state.slug) return;
   state.title = getTitleFromDocument();
   state.number = null;
+  state.difficulty = null;
+  state.tags = null;
   els.titleText.textContent = state.title;
-  loadQuestionNumber(state.slug);
+  loadQuestionMeta(state.slug);
 
   setStatus(null, 'reading…');
   els.commitBtn.disabled = true;
@@ -2168,6 +2174,7 @@ async function commitNote() {
     type: 'SAVE_NOTE',
     slug: state.slug,
     title: numberedTitle(),
+    meta: { number: state.number, title: state.title, difficulty: state.difficulty, tags: state.tags },
     content,
     sha: state.sha,
   });

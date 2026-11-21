@@ -109,6 +109,28 @@ Switching to another problem without a page reload — using LeetCode's own
 "next problem" navigation — is handled; the panel reloads the right note
 automatically.
 
+### Frontmatter
+
+Each committed note starts with YAML frontmatter, so Obsidian, Jekyll or a
+`grep` can filter by difficulty or topic:
+
+```yaml
+---
+number: 1
+title: "Two Sum"
+difficulty: "Easy"
+tags: ["Array", "Hash Table"]
+url: "https://leetcode.com/problems/two-sum/"
+created: 2026-11-21
+updated: 2026-11-24
+---
+```
+
+Number, difficulty and tags come from LeetCode's API. The panel never shows
+the block: it's stripped on load and rewritten on every commit. `created` is
+set on a note's first commit (notes from before this have none). Keys you add
+yourself on GitHub are kept as written.
+
 ## Review
 
 Every note goes on a review schedule, kept in `reviews.json` at the root of
@@ -128,7 +150,7 @@ overdue first. Notes with no entry yet, such as ones written before this
 feature, count as due. Editing a note doesn't reschedule it; only a rating
 does.
 
-`node github.test.mjs` checks the date and interval math.
+`node github.test.mjs` checks the date and interval math and the frontmatter.
 
 ## Where your data lives
 

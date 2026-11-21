@@ -2,7 +2,7 @@ import {
   getFile, saveFile, notePath, solutionPath, testConnection,
   getUser, createRepo, noteCommitDates, listNoteSlugs,
   branchExists, defaultBranch, deleteFile,
-  computeStreak, localDateKey,
+  computeStreak, localDateKey, splitFrontmatter, joinFrontmatter,
   getReviews, updateReviews, nextReview, addDays, daysBetween, FIRST_INTERVAL,
 } from './github.js';
 import { requestDeviceCode, pollForToken, signOut } from './auth.js';
@@ -102,7 +102,7 @@ async function loadNote(msg) {
     path,
     repo: `${config.owner}/${config.repo}`,
     streak: await getStreak(),
-    content: file ? file.content : '',
+    content: file ? splitFrontmatter(file.content).body : '',
     sha: file ? file.sha : null,
     review,
     reviewDue: !!file && (!review || review.due <= localDateKey(new Date())),
@@ -114,10 +114,26 @@ async function saveNote(msg) {
   if (!config) return unconfigured();
   const path = notePath(config, msg.slug);
   const message = `notes: ${msg.title || msg.slug}`;
+  const today = localDateKey(new Date());
+
+  // re-read the frontmatter so keys edited on GitHub survive this commit
+  const existing = msg.sha ? await getFile(config, path) : null;
+  const { entries } = splitFrontmatter(existing?.content || '');
+  const created = entries.find((e) => e.key === 'created')?.lines[0].match(/\d{4}-\d{2}-\d{2}/)?.[0];
+  const meta = msg.meta || {};
+  const content = joinFrontmatter(entries, {
+    number: meta.number,
+    title: meta.title,
+    difficulty: meta.difficulty,
+    tags: meta.tags,
+    url: `https://leetcode.com/problems/${msg.slug}/`,
+    created: msg.sha ? created : today,
+    updated: today,
+  }, msg.content);
 
   let sha;
   try {
-    sha = await saveFile(config, path, msg.content, msg.sha, message);
+    sha = await saveFile(config, path, content, msg.sha, message);
   } catch (e) {
     if (!/conflict|409|422/i.test(e.message)) throw e;
     const current = await getFile(config, path).catch(() => null);
